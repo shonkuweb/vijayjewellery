@@ -60,7 +60,7 @@ docker image prune -f >/dev/null 2>&1 || true
 if command -v systemctl >/dev/null 2>&1 && systemctl is-active --quiet nginx; then
     echo -e "${GOLD}[INFO] Host Nginx is active on this VPS.${NC}"
     if [ ! -f /etc/nginx/sites-available/vijayjewellery.conf ]; then
-        echo -e "${GOLD}[INFO] Setting up Nginx reverse proxy to port 3080...${NC}"
+        echo -e "${GOLD}[INFO] Setting up Nginx reverse proxy to port 3090...${NC}"
         cp ./nginx.conf.example /etc/nginx/sites-available/vijayjewellery.conf 2>/dev/null || true
         ln -sf /etc/nginx/sites-available/vijayjewellery.conf /etc/nginx/sites-enabled/ 2>/dev/null || true
         if nginx -t >/dev/null 2>&1; then
@@ -72,7 +72,7 @@ fi
 
 echo ""
 echo -e "${GREEN}======================================================${NC}"
-echo -e "${GREEN}✓ Vijay Jewellery Container Running on 127.0.0.1:3080!${NC}"
+echo -e "${GREEN}✓ Vijay Jewellery Container Running on 127.0.0.1:3090!${NC}"
 echo -e "${GREEN}======================================================${NC}"
 echo ""
 docker compose ps

@@ -8,7 +8,7 @@ services:
     expose:
       - "3000"
     ports:
-      - "127.0.0.1:3080:3000"
+      - "127.0.0.1:3090:3000"
     volumes:
       - ./prisma:/app/prisma
       - ./app/data:/app/app/data

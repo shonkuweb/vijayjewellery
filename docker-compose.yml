@@ -1,14 +1,38 @@
 services:
-  diamond-nursery:
+  web:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: diamond-nursery-web
+    container_name: vijay-jewellery-web
+    restart: unless-stopped
+    expose:
+      - "3000"
+    volumes:
+      - ./prisma:/app/prisma
+      - ./app/data:/app/app/data
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - DATABASE_URL=file:/app/prisma/dev.db
+      - NEXT_PUBLIC_SITE_URL=https://vijayjewellery.shonku.site
+    env_file:
+      - .env
+
+  caddy:
+    image: caddy:2-alpine
+    container_name: vijay-jewellery-caddy
     restart: unless-stopped
     ports:
-      - "127.0.0.1:3080:3000"
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
     volumes:
-      - ./app/data:/app/app/data
-      - ./public/diamondnursery:/app/public/diamondnursery
-    env_file:
-      - .env.local
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - web
+
+volumes:
+  caddy_data:
+  caddy_config:

@@ -1,58 +1,176 @@
 import { NextResponse } from 'next/server';
-import fs from 'fs';
-import path from 'path';
+import prisma from '../../../lib/prisma';
 
-const dataFilePath = path.join(process.cwd(), 'app', 'data', 'products.json');
-
-function readProducts() {
+export async function GET(request) {
   try {
-    if (!fs.existsSync(dataFilePath)) return [];
-    const fileData = fs.readFileSync(dataFilePath, 'utf8');
-    return JSON.parse(fileData);
-  } catch (error) {
-    return [];
-  }
-}
+    const { searchParams } = new URL(request.url);
+    const categoryId = searchParams.get('categoryId');
+    const search = searchParams.get('search');
 
-export async function GET() {
-  let products = readProducts();
-  let changed = false;
-  
-  const slugCounts = {};
-  for (let i = 0; i < products.length; i++) {
-    const slug = products[i].slug;
-    if (!slugCounts[slug]) {
-      slugCounts[slug] = 1;
-    } else {
-      slugCounts[slug]++;
-      // Generate a unique slug for duplicates
-      products[i].slug = `${slug}-${Date.now()}-${slugCounts[slug]}`;
-      changed = true;
+    const where = {};
+    if (categoryId && categoryId !== 'all') {
+      where.categoryId = parseInt(categoryId, 10);
     }
-  }
+    if (search) {
+      where.OR = [
+        { title: { contains: search } },
+        { description: { contains: search } },
+      ];
+    }
 
-  if (changed) {
-    fs.writeFileSync(dataFilePath, JSON.stringify(products, null, 2));
-  }
+    const products = await prisma.product.findMany({
+      where,
+      include: {
+        category: true,
+      },
+      orderBy: {
+        createdAt: 'desc',
+      },
+    });
 
-  return NextResponse.json(products);
+    const formatted = products.map((p) => {
+      let parsedSpecs = null;
+      if (p.specs) {
+        try {
+          parsedSpecs = JSON.parse(p.specs);
+        } catch {
+          parsedSpecs = p.specs;
+        }
+      }
+      return {
+        ...p,
+        specs: parsedSpecs,
+        categoryName: p.category?.name || null,
+      };
+    });
+
+    return NextResponse.json(formatted);
+  } catch (error) {
+    console.error('Failed to fetch products:', error);
+    return NextResponse.json({ error: 'Failed to fetch products' }, { status: 500 });
+  }
 }
 
 export async function POST(request) {
   try {
-    const newProduct = await request.json();
-    const products = readProducts();
+    const body = await request.json();
+    const {
+      title,
+      slug,
+      price,
+      oldPrice,
+      categoryId,
+      collectionTag,
+      specs,
+      description,
+      image,
+      featured,
+      inStock,
+    } = body;
 
-    newProduct.id = Date.now().toString();
+    if (!title || !price) {
+      return NextResponse.json({ error: 'Title and price are required' }, { status: 400 });
+    }
 
-    products.push(newProduct);
+    let baseSlug = (slug || title)
+      .toLowerCase()
+      .trim()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '');
 
-    fs.writeFileSync(dataFilePath, JSON.stringify(products, null, 2));
+    if (!baseSlug) baseSlug = `piece-${Date.now()}`;
+
+    // Ensure unique slug
+    let finalSlug = baseSlug;
+    let count = 1;
+    while (await prisma.product.findUnique({ where: { slug: finalSlug } })) {
+      finalSlug = `${baseSlug}-${count++}`;
+    }
+
+    const specsStr = specs ? (typeof specs === 'string' ? specs : JSON.stringify(specs)) : null;
+
+    const newProduct = await prisma.product.create({
+      data: {
+        title: title.trim(),
+        slug: finalSlug,
+        price: String(price).trim(),
+        oldPrice: oldPrice ? String(oldPrice).trim() : null,
+        categoryId: categoryId ? parseInt(categoryId, 10) : null,
+        collectionTag: collectionTag ? collectionTag.trim() : null,
+        specs: specsStr,
+        description: description ? description.trim() : '',
+        image: image || '',
+        featured: Boolean(featured),
+        inStock: inStock !== false,
+      },
+      include: {
+        category: true,
+      },
+    });
 
     return NextResponse.json({ message: 'Product added successfully', product: newProduct }, { status: 201 });
   } catch (error) {
-    console.error("Failed to add product:", error);
+    console.error('Failed to add product:', error);
     return NextResponse.json({ error: 'Failed to add product' }, { status: 500 });
+  }
+}
+
+export async function PUT(request) {
+  try {
+    const body = await request.json();
+    const {
+      id,
+      title,
+      slug,
+      price,
+      oldPrice,
+      categoryId,
+      collectionTag,
+      specs,
+      description,
+      image,
+      featured,
+      inStock,
+    } = body;
+
+    if (!id) {
+      return NextResponse.json({ error: 'Product ID is required for update' }, { status: 400 });
+    }
+
+    const existing = await prisma.product.findUnique({ where: { id } });
+    if (!existing) {
+      return NextResponse.json({ error: 'Product not found' }, { status: 404 });
+    }
+
+    const dataToUpdate = {};
+    if (title !== undefined) dataToUpdate.title = title.trim();
+    if (slug !== undefined) {
+      const cleanSlug = slug.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+      if (cleanSlug !== existing.slug) {
+        const conflict = await prisma.product.findUnique({ where: { slug: cleanSlug } });
+        if (!conflict) dataToUpdate.slug = cleanSlug;
+      }
+    }
+    if (price !== undefined) dataToUpdate.price = String(price).trim();
+    if (oldPrice !== undefined) dataToUpdate.oldPrice = oldPrice ? String(oldPrice).trim() : null;
+    if (categoryId !== undefined) dataToUpdate.categoryId = categoryId ? parseInt(categoryId, 10) : null;
+    if (collectionTag !== undefined) dataToUpdate.collectionTag = collectionTag ? collectionTag.trim() : null;
+    if (specs !== undefined) dataToUpdate.specs = specs ? (typeof specs === 'string' ? specs : JSON.stringify(specs)) : null;
+    if (description !== undefined) dataToUpdate.description = description ? description.trim() : '';
+    if (image !== undefined) dataToUpdate.image = image;
+    if (featured !== undefined) dataToUpdate.featured = Boolean(featured);
+    if (inStock !== undefined) dataToUpdate.inStock = Boolean(inStock);
+
+    const updated = await prisma.product.update({
+      where: { id },
+      data: dataToUpdate,
+      include: { category: true },
+    });
+
+    return NextResponse.json({ message: 'Product updated successfully', product: updated });
+  } catch (error) {
+    console.error('Failed to update product:', error);
+    return NextResponse.json({ error: 'Failed to update product' }, { status: 500 });
   }
 }
 
@@ -60,49 +178,23 @@ export async function DELETE(request) {
   try {
     const { searchParams } = new URL(request.url);
     const slug = searchParams.get('slug');
+    const id = searchParams.get('id');
 
-    if (!slug) {
-      return NextResponse.json({ error: 'Slug is required' }, { status: 400 });
+    if (!slug && !id) {
+      return NextResponse.json({ error: 'Slug or ID is required' }, { status: 400 });
     }
 
-    let products = readProducts();
-    const initialLength = products.length;
-    products = products.filter(p => p.slug !== slug);
-
-    if (products.length === initialLength) {
+    const where = id ? { id } : { slug };
+    const existing = await prisma.product.findFirst({ where });
+    if (!existing) {
       return NextResponse.json({ error: 'Product not found' }, { status: 404 });
     }
 
-    fs.writeFileSync(dataFilePath, JSON.stringify(products, null, 2));
+    await prisma.product.delete({ where: { id: existing.id } });
+
     return NextResponse.json({ message: 'Product deleted successfully' }, { status: 200 });
   } catch (error) {
+    console.error('Failed to delete product:', error);
     return NextResponse.json({ error: 'Failed to delete product' }, { status: 500 });
-  }
-}
-
-export async function PUT(request) {
-  try {
-    const updatedProduct = await request.json();
-    
-    if (!updatedProduct.id) {
-      return NextResponse.json({ error: 'Product ID is required for update' }, { status: 400 });
-    }
-
-    let products = readProducts();
-    const index = products.findIndex(p => p.id === updatedProduct.id);
-
-    if (index === -1) {
-      return NextResponse.json({ error: 'Product not found' }, { status: 404 });
-    }
-
-    // Merge old product data with new data (to preserve anything not sent, like image if empty)
-    products[index] = { ...products[index], ...updatedProduct };
-
-    fs.writeFileSync(dataFilePath, JSON.stringify(products, null, 2));
-
-    return NextResponse.json({ message: 'Product updated successfully', product: products[index] }, { status: 200 });
-  } catch (error) {
-    console.error("Failed to update product:", error);
-    return NextResponse.json({ error: 'Failed to update product' }, { status: 500 });
   }
 }

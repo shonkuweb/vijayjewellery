@@ -24,3 +24,9 @@ yarn-error.log*
 # editor
 .vscode/
 .idea/
+
+# sqlite databases
+*.db
+*.db-journal
+*.db-wal
+*.db-shm

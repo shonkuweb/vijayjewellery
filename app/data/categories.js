@@ -1,1 +1,1 @@
-export const categories = ["Hoya", "Adenium"];
+export const categories = [];

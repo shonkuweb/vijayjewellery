@@ -1,0 +1,75 @@
+generator client {
+  provider        = "prisma-client-js"
+  binaryTargets   = ["native", "linux-musl-openssl-3.0.x", "debian-openssl-3.0.x"]
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Product {
+  id            String    @id @default(cuid())
+  title         String
+  slug          String    @unique
+  price         String
+  oldPrice      String?
+  categoryId    Int?
+  category      Category? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  collectionTag String?
+  specs         String?   // JSON-encoded string for specifications (metal, gemstone, clarity, certificate, etc.)
+  description   String?
+  image         String?
+  featured      Boolean   @default(false)
+  inStock       Boolean   @default(true)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@index([slug])
+  @@index([categoryId])
+}
+
+model Category {
+  id        Int       @id @default(autoincrement())
+  name      String
+  slug      String    @unique
+  icon      String?
+  image     String?
+  order     Int       @default(0)
+  products  Product[]
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  @@index([slug])
+}
+
+model Order {
+  id        String   @id // Formatted order ID (e.g., VJC-123456)
+  customer  String
+  phone     String
+  email     String?
+  address   String
+  pincode   String
+  notes     String?
+  items     String   // JSON string of ordered items
+  subtotal  String
+  total     String
+  status    String   @default("Pending") // Pending, Processing, Shipped, Delivered, Cancelled
+  placedAt  DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status])
+  @@index([placedAt])
+}
+
+model SiteConfig {
+  id        String   @id @default("default")
+  config    String   // JSON-encoded site configuration
+  updatedAt DateTime @updatedAt
+}
+
+model AdminUser {
+  id        String   @id @default("admin")
+  password  String   // Stored admin password / hash
+  updatedAt DateTime @updatedAt
+}

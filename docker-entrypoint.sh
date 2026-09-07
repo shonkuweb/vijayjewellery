@@ -1,14 +1,14 @@
 #!/bin/sh
 set -e
 
-echo "==> Preparing Vijay Jewellery Collection database..."
+echo "==> Checking database..."
 mkdir -p /app/prisma
 
-# Automatically sync schema to SQLite persistent volume
-npx prisma db push --skip-generate
-
-# Ensure default site config and admin auth exist
-node prisma/seed.js
+if [ ! -s /app/prisma/dev.db ]; then
+  echo "==> Initializing persistent database from template..."
+  cp /app/prisma-template.db /app/prisma/dev.db
+  chmod 666 /app/prisma/dev.db 2>/dev/null || true
+fi
 
 echo "==> Starting production Next.js server..."
 exec node server.js

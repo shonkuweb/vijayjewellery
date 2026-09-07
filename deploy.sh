@@ -56,19 +56,34 @@ docker compose up -d --build --remove-orphans
 echo -e "${GOLD}[INFO] Cleaning up dangling docker images...${NC}"
 docker image prune -f >/dev/null 2>&1 || true
 
+# 7. Host Nginx Integration (if host Nginx is active)
+if command -v systemctl >/dev/null 2>&1 && systemctl is-active --quiet nginx; then
+    echo -e "${GOLD}[INFO] Host Nginx is active on this VPS.${NC}"
+    if [ ! -f /etc/nginx/sites-available/vijayjewellery.conf ]; then
+        echo -e "${GOLD}[INFO] Setting up Nginx reverse proxy to port 3080...${NC}"
+        cp ./nginx.conf.example /etc/nginx/sites-available/vijayjewellery.conf 2>/dev/null || true
+        ln -sf /etc/nginx/sites-available/vijayjewellery.conf /etc/nginx/sites-enabled/ 2>/dev/null || true
+        if nginx -t >/dev/null 2>&1; then
+            systemctl reload nginx
+            echo -e "${GREEN}✓ Host Nginx configured and reloaded for vijayjewellery.shonku.site!${NC}"
+        fi
+    fi
+fi
+
 echo ""
 echo -e "${GREEN}======================================================${NC}"
-echo -e "${GREEN}✓ Deployment Successful!${NC}"
+echo -e "${GREEN}✓ Vijay Jewellery Container Running on 127.0.0.1:3080!${NC}"
 echo -e "${GREEN}======================================================${NC}"
 echo ""
-echo "Containers running:"
 docker compose ps
 echo ""
-echo -e "${GOLD}Next Step:${NC} Ensure your DNS A Record is configured:"
-echo "  • Type:     A"
-echo "  • Host:     vijayjewellery"
-echo "  • Value:    <Your VPS Public IP>"
+echo -e "${GOLD}Nginx & SSL Configuration (if not done yet):${NC}"
+echo "  1. sudo cp nginx.conf.example /etc/nginx/sites-available/vijayjewellery.conf"
+echo "  2. sudo ln -sf /etc/nginx/sites-available/vijayjewellery.conf /etc/nginx/sites-enabled/"
+echo "  3. sudo nginx -t && sudo systemctl reload nginx"
+echo "  4. sudo certbot --nginx -d vijayjewellery.shonku.site"
 echo ""
-echo -e "Once DNS propagates, Caddy will automatically issue the SSL certificate at:"
+echo -e "Access your store at:"
 echo -e "${GREEN}👉 https://vijayjewellery.shonku.site${NC}"
 echo -e "${GREEN}👉 https://vijayjewellery.shonku.site/admin${NC}"
+

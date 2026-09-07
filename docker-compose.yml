@@ -15,6 +15,7 @@ services:
     environment:
       - NODE_ENV=production
       - PORT=3000
+      - HOSTNAME=0.0.0.0
       - DATABASE_URL=file:/app/prisma/dev.db
       - NEXT_PUBLIC_SITE_URL=https://vijayjewellery.shonku.site
     env_file:
